@@ -336,6 +336,13 @@ header.top{background:color-mix(in srgb,var(--bg) 96%,transparent);-webkit-backd
 .cardlink{color:inherit;font-weight:600;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:color-mix(in srgb,var(--leg1) 70%,var(--ink));text-underline-offset:3px;text-decoration-thickness:2px}
 .cardlink:hover{color:color-mix(in srgb,var(--leg1) 60%,var(--ink));text-decoration-style:solid}
 /* card popup */
+.kwlist{margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb, var(--surface) 92%, var(--accent, #b8860b))}
+.kwlist h4{margin:0 0 4px}
+.kwlist dl{margin:0;display:grid;grid-template-columns:max-content 1fr;gap:3px 10px;font-size:13px}
+.kwlist dt{font-weight:700}
+.kwlist dd{margin:0}
+.tz-kw{margin:6px 0 0;padding-left:16px;font-size:12px;line-height:1.3}
+.tz-kw li{margin:2px 0}
 .tip.tip-card{max-width:none;width:248px;padding:8px;gap:6px;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
 .tip.tip-card .cardface{width:100%;cursor:default;box-shadow:none}
 .tip.tip-card .tc-name{font-family:var(--display);font-size:15px;text-transform:uppercase;letter-spacing:.03em}
@@ -556,6 +563,8 @@ body.no-art [data-opp]::before{display:none}
 .g-bar{background:rgba(0,0,0,.35);border-radius:10px;padding:6px 10px}
 .g-bar .g-phase{color:#fff}
 .g-menu,.g-prompt{color:var(--ink)}
+.g-deprow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;margin:4px 0;padding:3px 6px;border:1px dashed rgba(255,215,120,.45);border-radius:8px}
+.g-deprow .g-gearcard{width:58px}
 .g-prompt .g-opt2{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;line-height:1.25;white-space:normal}
 .g-prompt .g-opt2 small{font-weight:400;opacity:.8;font-size:.78em}
 @media (max-width:1100px){.g-wrap{grid-template-columns:minmax(0,1fr)}}
@@ -1190,7 +1199,7 @@ function openCard(code){
     <h2>${esc(lg ? lg.champ+", "+c.name : c.name)}</h2>
     <div class="row" style="margin-top:6px">${c.dom.map(d=>`<span class="dom" data-d="${d}">${d}</span>`).join("")}<span class="conf">${esc((c.sup?c.sup+" ":"")+c.type)}</span>${isBanned(c)?'<span class="legal-pill bad">Banned</span>':""}${isUnique(c)?'<span class="conf">Unique</span>':""}</div>
     <div class="stats">${c.e!=null?`<span><b>${c.e}</b> energy</span>`:""}${c.p?`<span><b>${c.p}</b> power</span>`:""}${c.m!=null?`<span><b>${c.m}</b> might</span>`:""}<span>In deck: <b>${qtyInDeck(c)}</b></span></div>
-    <div class="rules">${fmt(c.text) || "<span class=muted>No rules text.</span>"}</div>
+    <div class="rules">${fmt(c.text) || "<span class=muted>No rules text.</span>"}</div>${kwListHTML(c)}
     ${c.tags.length?`<p class="muted" style="font-size:13px">Tags: ${c.tags.map(esc).join(", ")}</p>`:""}
     <div class="row" style="margin-top:10px">
       <button class="btn primary" type="button" data-add="${code}">${c.type==="Legend"?"Use this Legend":"Add to deck"}</button>
@@ -1318,7 +1327,7 @@ function renderPlaybook(){
       ${open?`<div class="mu-body2"${oppArt(k)}>
         ${Q?`<div class="gsec good"><h4 class="hub-h">With your deck: ${esc(myD.name||"Untitled")}</h4>
           <p style="margin:0"><span class="chip keep">Keep</span>${esc(Q.mull.keep)}<br><span class="chip ship">Send back</span>${esc(Q.mull.ship)}</p>
-          <p style="margin:6px 0 0"><b>Hold:</b> ${esc(Q.hold)}</p>
+          <p style="margin:6px 0 0"><b>Hold:</b> ${esc(Q.hold)}</p>${recordHTML(myD.legend, k)}
           <h4 style="margin-top:8px">Games 2 and 3</h4>${sideHTML(myD, Q.side)}</div>`:""}
         <h4 class="hub-h">General Riven notes (Orlando lists)</h4><p>${esc(m.plan)}</p>
         <div class="io-cols"><div><h4 class="in">Orlando lists bring in</h4>${namesToFaces(m.in)}</div><div><h4 class="out">Orlando lists take out</h4><ul>${m.out.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div></div>
@@ -1788,7 +1797,51 @@ const COLUMN_DEF = {
   "opponent":"The opposing Legend. Click to open the matchup page.",
   "date":"Day the game was played.", "where":"Store or event.", "me":"The Legend you played.", "result":"W win, L loss, D draw, then the game score.", "notes":"Your notes from that game."
 };
-function kwDef(name){ const e = LIBRARY.find(x => x.t.toLowerCase() === ("keyword: " + name).toLowerCase()); return e ? e.x : null; }
+// Keyword definitions, from the riftbound.gg Keywords & Glossary page and Riot's Radiance core rules notes (Deploy).
+// Numbers on a card (Assault 2, Shield 3, Level 6...) replace X.
+const KW_DEFS = {
+  "Accelerate":"Optional extra cost when you play the unit: pay 1 energy + 1 power (of one of the unit's domains) and it enters ready instead of exhausted.",
+  "Action":"Timing permission: can be played or activated on your turn or during showdowns (on any player's turn).",
+  "Reaction":"Timing permission: everything Action allows, plus any time, even before spells and abilities resolve (closed states too).",
+  "Ambush":"Can be played to a battlefield where you control units, and has Reaction while being played there.",
+  "Assault":"While this unit is an attacker, it gets +X might. Instances stack.",
+  "Shield":"While this unit is a defender, it gets +X might. Instances stack.",
+  "Backline":"Must be assigned lethal combat damage after your other units that don't have Backline.",
+  "Tank":"Must be assigned lethal combat damage before your other units that don't have Tank.",
+  "Deathknell":"Triggers when this is killed and goes to the trash. If the death is replaced (for example it's recalled instead), it doesn't trigger.",
+  "Deflect":"Opponents must pay X more power (any color) to choose this unit with a spell or ability. Instances stack.",
+  "Deploy":"Gear that can only be played to a battlefield (any battlefield: yours, uncontrolled or enemy) and gives its benefits there. It stays at that battlefield and is killed when an opponent holds it.",
+  "Disarm":"When this unit attacks, an enemy unit at this battlefield gets -X might this turn. Instances stack.",
+  "Empower":"Activated ability: pay its cost to make this card Empowered. Can't be used if it's already Empowered.",
+  "Empowered":"While this card is Empowered, it has the ability that follows.",
+  "Equip":"Activated ability on Equipment: pay its cost to attach it to a unit you control.",
+  "Flow":"You may play this spell from your trash for its Flow cost instead of its normal cost, then banish it. Timing rules don't change.",
+  "Ganking":"Lets this unit make a standard move from one battlefield to another battlefield. It doesn't give extra moves or change the cost.",
+  "Hidden":"On your turn, pay 1 power (any color) to hide this facedown at a battlefield you control (one per battlefield). From your next turn it has Reaction and can be played for 0 energy, but only to or targeting that battlefield.",
+  "Hunt":"When this unit conquers or holds, you gain X XP.",
+  "Legion":"If you've played another Main Deck card this turn, this card has the ability that follows.",
+  "Level":"While you have at least that much XP, this card has the ability that follows (checked all the time).",
+  "Quick-Draw":"This gear has Reaction. When you play it, attach it to a unit you control.",
+  "Repeat":"Optional extra cost when you play this: pay it to carry out the effect one more time (you may make different choices). It still counts as one card played.",
+  "Show Off":"As you play this, you may reveal a qualifying card from your hand or pick a friendly one on the board to unlock the extra effect.",
+  "Temporary":"Killed at the start of its controller's Beginning Phase, before scoring.",
+  "Unique":"Deck building only: your deck can have only one card with this name.",
+  "Vision":"When you play this, Predict: look at the top card of your Main Deck; you may recycle it.",
+  "Weaponmaster":"When you play this unit, you may pay an Equipment's Equip cost minus 1 power to attach it to this unit, even if it's already attached to another unit.",
+  "Stun":"A stunned unit deals no combat damage this turn (it still needs its full might in damage to die). Wears off at end of turn.",
+  "Predict":"Look at the top card (or top X cards) of your Main Deck, recycle any of them, and put the rest back in any order.",
+  "Burn":"Put the top X cards of that Main Deck into its owner's trash.",
+  "Buff":"Put a +1 might buff on a unit that doesn't already have one.",
+  "Mighty":"A unit is Mighty while it has 5 or more might.",
+  "Add":"Put the listed resources into your rune pool. Add abilities can't be reacted to."
+};
+const KW_SRC = "Definitions: riftbound.gg Keywords & Glossary; Deploy also per Riot's Radiance core rules notes.";
+function kwDef(name){ const k = Object.keys(KW_DEFS).find(x => x.toLowerCase() === String(name).toLowerCase()); if (k) return KW_DEFS[k]; const e = LIBRARY.find(x => x.t.toLowerCase() === ("keyword: " + name).toLowerCase()); return e ? e.x : null; }
+function cardKeywords(c){ const out = new Map(); for (const m of (c.text || "").matchAll(/\[([A-Z][A-Za-z\- ]+?)(?:\s+(\d+))?\]/g)){ const k = m[1].trim(); const d = kwDef(k); if (d && !out.has(k)) out.set(k, {k, n:m[2] ? +m[2] : null, d: m[2] ? d.replace(/\bX\b/g, m[2]) : d.replace(/\bX\b/g, k === "Deflect" ? "1" : "X")}); }
+  if (/\bMighty\b/.test(c.text || "") && !out.has("Mighty")) out.set("Mighty", {k:"Mighty", d:KW_DEFS.Mighty}); return [...out.values()]; }
+function kwListHTML(c, compact){ const L = cardKeywords(c); if (!L.length) return "";
+  return compact ? `<ul class="tz-kw">${L.map(x => `<li><b>${esc(x.k)}${x.n != null ? " " + x.n : ""}:</b> ${esc(x.d)}</li>`).join("")}</ul>`
+    : `<div class="kwlist"><h4>Keywords on this card</h4><dl>${L.map(x => `<dt>${esc(x.k)}${x.n != null ? " " + x.n : ""}</dt><dd>${esc(x.d)}</dd>`).join("")}</dl><p class="src">${esc(KW_SRC)}</p></div>`; }
 function cardTip(c){
   const bits = [];
   if (c.e != null) bits.push(`${c.e} energy`); if (c.p) bits.push(`${c.p} power`); if (c.m != null) bits.push(`${c.m} might`);
@@ -1885,7 +1938,7 @@ function showTip(info){
   tipEl.classList.toggle("tip-land", !!(info.zoom && info.card?.type === "Battlefield"));
   if (info.zoom){ const c = info.card; tipLastZoom = c.code;
     const txt = (c.text||"").replace(/:rb_energy_(\d+):/g,"$1 energy").replace(/:rb_rune_rainbow:/g,"1 power").replace(/:rb_rune_(\w+):/g,"1 $1 power").replace(/:rb_might:/g," might").replace(/:rb_exhaust:/g,"[exhaust]").replace(/:rb_\w+:/g,"");
-    tipEl.innerHTML = `${c.img?`<img class="tz-img" src="${cardSrc(c, 600)}" alt="" onerror="if(!this.dataset.t){this.dataset.t=1;this.src='${cdnCard(c, 600)}'}else this.remove()">`:""}<div class="tz-body"><div class="tc-name">${esc(c.name)}</div><div class="tc-sub">${esc((c.sup?c.sup+" ":"")+c.type)} · ${esc((c.dom||[]).join(" / "))}${c.e!=null?` · ${c.e} energy`:""}${c.p?` + ${c.p} power`:""}${c.m!=null?` · ${c.m} might`:""}</div><p class="tz-text">${esc(txt)}</p></div>`;
+    tipEl.innerHTML = `${c.img?`<img class="tz-img" src="${cardSrc(c, 600)}" alt="" onerror="if(!this.dataset.t){this.dataset.t=1;this.src='${cdnCard(c, 600)}'}else this.remove()">`:""}<div class="tz-body"><div class="tc-name">${esc(c.name)}</div><div class="tc-sub">${esc((c.sup?c.sup+" ":"")+c.type)} · ${esc((c.dom||[]).join(" / "))}${c.e!=null?` · ${c.e} energy`:""}${c.p?` + ${c.p} power`:""}${c.m!=null?` · ${c.m} might`:""}</div><p class="tz-text">${esc(txt)}</p>${kwListHTML(c, true)}</div>`;
     tipEl.querySelector("img")?.addEventListener("load", placeTip);
     tipEl.hidden = false; placeTip(); return; }
   if (info.card){ const c = info.card; tipEl.innerHTML = `${face(c,{plain:true,big:true}).replace('loading="lazy"','loading="eager"')}<div><div class="tc-name">${esc(c.name)}</div><div class="tc-sub">${esc((c.sup?c.sup+" ":"")+c.type)} · ${esc(c.dom.join(" / "))}${c.e!=null?` · ${c.e} energy`:""}${c.m!=null?` · ${c.m} might`:""}</div></div>`; tipEl.querySelector("img")?.addEventListener("load", placeTip); }
@@ -2162,6 +2215,22 @@ function sideHTML(d, plan){
   const li = (x, where) => `<li>${x.q} ${esc(x.n)}${x.ok?"":` <span class="warn-t">(you have ${x.have} in your ${where})</span>`}</li>`;
   return `<div class="io-cols"><div><h4 class="in">Bring in</h4><ul>${ins.map(x => li(x,"sideboard")).join("")}</ul></div><div><h4 class="out">Take out</h4><ul>${outs.map(x => li(x,"main deck")).join("")}</ul></div></div><p style="font-size:13px">${esc(plan.why)}</p>${plan.cond?`<p class="muted" style="font-size:13px">${esc(plan.cond)}</p>`:""}`;
 }
+// Your own results vs a legend: Local Log games (real) and Play vs Computer games (practice)
+function myRecord(me, opp){
+  const L = localGames.filter(g => g.me === me && g.opp === opp), C = (typeof gHist !== "undefined" ? gHist : []).filter(r => r && !r.multi && r.legend === me && r.oppLegend === opp);
+  const wl = a => ({w:a.filter(x => x === "W").length, l:a.filter(x => x === "L").length, d:a.filter(x => x === "D").length});
+  const loc = wl(L.map(g => g.res)), comp = wl(C.map(r => r.winner === "me" ? "W" : "L"));
+  const last = [...L].sort((a,b) => (b.date||"").localeCompare(a.date||"") || (b.ts||0) - (a.ts||0))[0];
+  return {loc, comp, nL:L.length, nC:C.length, last, notes:L.filter(g => g.notes).sort((a,b) => (b.date||"").localeCompare(a.date||"")).slice(0, 2)};
+}
+function recordHTML(me, opp){
+  const R = myRecord(me, opp), who = esc(legByCode(opp)?.champ || "them");
+  const rec = x => `${x.w}-${x.l}${x.d ? "-" + x.d : ""}`;
+  if (!R.nL && !R.nC) return `<div class="gsec"><h4 class="hub-h">Your record vs ${who}</h4><p class="muted" style="margin:0">No games yet. Log your rounds in <a href="#local">Local Log</a>; Play vs Computer games against this deck count here too.</p></div>`;
+  return `<div class="gsec"><h4 class="hub-h">Your record vs ${who}</h4><p style="margin:0">${R.nL ? `<b>Local games ${rec(R.loc)}</b>${R.last ? ` <span class="muted">(last ${esc(R.last.date || "")}${R.last.store ? ", " + esc(R.last.store) : ""})</span>` : ""}` : `<span class="muted">No local games logged yet.</span>`}${R.nC ? ` · vs the computer ${rec(R.comp)}` : ""}</p>
+    ${R.notes.length ? `<ul style="margin:6px 0 0">${R.notes.map(g => `<li><span class="muted">${esc(g.date||"")}:</span> ${esc(g.notes)}</li>`).join("")}</ul>` : ""}
+    ${R.nL >= 3 && R.loc.l > R.loc.w ? `<p class="warn-t" style="margin:6px 0 0">You're behind in this matchup locally: worth re-reading the plan and trying the sideboard swap.</p>` : ""}</div>`;
+}
 function oppPlanHTML(d, opp){
   const P = (OPP_PLANS[d.legend]||{})[opp]; if (!P) return "";
   const byId = new Map(COMBOS.map(c => [c.id, c]));
@@ -2172,6 +2241,7 @@ function oppPlanHTML(d, opp){
      <div class="gsec good"><h4 class="hub-h">Combos to go for</h4><ul>${go.map(({cb,st}) => `<li><b>${esc(cb.name)}</b>${st.have?"":` <span class="warn-t">(needs ${esc(st.missing.join(" + "))})</span>`}: ${esc(cb.how.split(". ")[0])}.</li>`).join("")}</ul></div>
      <div class="gsec plan"><h4 class="hub-h">What to hold back</h4><p style="margin:0">${esc(P.hold)}</p></div>
      <div class="gsec warn"><h4 class="hub-h">Their combos and threats to watch</h4><ul>${P.watch.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>
+     ${recordHTML(d.legend, opp)}
    </div><div style="min-width:0">
      <h4 class="hub-h">Mulligan</h4><p><span class="chip keep">Keep</span>${esc(P.mull.keep)}<br><span class="chip ship">Send back</span>${esc(P.mull.ship)}</p>
      <p class="muted" style="font-size:13px">${esc((GUIDES.mullNote||{}).base||"")} <a href="#practice" data-propp="${opp}">Practice hands for this matchup</a></p>
@@ -3069,7 +3139,7 @@ async function playUnitInner(side, id, dest, opt = {}){
   const c = gCard(H.obj.code), lr = LEGEND_RULES[p.legend] || {};
   if (silenced(side) && !opt.free){ if (side === "me") flag("Brynhir Thundersong: you can't play cards this turn.", true); return; }
   if (H.from === "facedown") dest = H.obj.bf;
-  if (c.name === "Baron Nashor"){ let pit = G.bfs.find(b => b.code === TOKENS.pit.code); if (!pit){ pit = {idx:G.bfs.length, code:TOKENS.pit.code, ctrl:null, units:[], token:true}; G.bfs.push(pit); glog("Baron Nashor added the Baron Pit battlefield token to the board.", {why:"Baron Nashor: as you play me, add the Baron Pit if it's not there; I enter there. Units can move there from anywhere."}); } dest = pit.idx; opt.anywhere = true; }
+  if (c.name === "Baron Nashor"){ let pit = G.bfs.find(b => b.code === TOKENS.pit.code); if (!pit){ pit = {idx:G.bfs.length, code:TOKENS.pit.code, ctrl:null, units:[], token:true}; G.bfs.push(pit); glog("Baron Nashor added the Baron Pit battlefield token to the board.", {why:"Baron Nashor: as you play me, add the Baron Pit battlefield token if it's not there already. If you do, I enter there. Units can move there from anywhere."}); dest = pit.idx; opt.anywhere = true; } else glog("The Baron Pit is already on the board, so Baron Nashor enters where he's played instead of the Pit.", {why:"Baron Nashor: he only enters the Pit when his play adds it."}); }
   if (dest !== "base" && G.bfs[dest] && AB[cnm(G.bfs[dest].code)]?.noPlay && H.from !== "facedown"){ if (side === "me") flag(`Illegal move: units can't be played to ${cnm(G.bfs[dest].code)}.`, true); return; }
   const enemiesThere = dest !== "base" && G.bfs[dest].units.some(x => isFoe(side, x.ctrl));
   if (c.name === "Rengar - Trophy Hunter" && enemiesThere) opt.anywhere = true;
@@ -3148,8 +3218,14 @@ async function playGear(side, id, opt = {}){
   const p = G.players[side], H = handObj(side, id); if (!H) return; const c = gCard(H.obj.code);
   if (silenced(side)){ if (side === "me") flag("Brynhir Thundersong: you can't play cards this turn.", true); return; }
   let bf = null;
-  if (kw(c, "Deploy")){ const mine = G.bfs.filter(b => b.ctrl === side); if (!mine.length){ if (side === "me") flag(`Illegal move: ${c.name} has Deploy, so it can only be played to a battlefield you control.`, true); return; }
-    bf = mine.length === 1 ? mine[0].idx : +(await ask(side, {title:`${c.name} (Deploy): play it to which battlefield?`, options:mine.map(b => ({id:String(b.idx), label:cnm(b.code)})), ai:o => o[0].id})); }
+  if (kw(c, "Deploy")){
+    if (opt.bf != null && G.bfs[opt.bf]) bf = opt.bf;
+    else if (G.bfs.length === 1) bf = 0;
+    else { const ctl = b => b.ctrl === side ? "you control" : !b.ctrl ? "uncontrolled" : isFoe(side, b.ctrl) ? "enemy" : "ally";
+      const pk = await ask(side, {title:`${c.name} has Deploy: play it to which battlefield? (any battlefield; it's killed if an opponent holds there)`, options:G.bfs.map(b => ({id:String(b.idx), label:`${cnm(b.code)} (${ctl(b)})`})), optional:side === "me", passLabel:"Cancel",
+        ai:o => (o.find(x => G.bfs[+x.id].ctrl === side) || o.find(x => G.bfs[+x.id].units.some(u => u.ctrl === side)) || o.find(x => !G.bfs[+x.id].ctrl) || o[0]).id});
+      if (pk == null){ glog(`Kept ${c.name} in hand.`); renderGame(); return; } bf = +pk; }
+    glog(`${c.name} (Deploy) goes to ${cnm(G.bfs[bf].code)}.`, {why:"Deploy: play this only to a battlefield (any battlefield: yours, uncontrolled or enemy). When an opponent holds there, it's killed."}); }
   const cost = H.from === "facedown" ? costOf(side, c, {energy:0, noDiscount:true}) : costOf(side, c, {dest:bf == null ? undefined : bf});
   { const m = await choosePayment(side, c, cost, opt.mode, false); if (m === null){ glog(`Kept ${c.name} in hand (payment cancelled).`); renderGame(); return; } opt.mode = m; }
   if (opt.mode !== "pool" && (cost.e || cost.p) && !payPreview(side, cost, false, (opt.mode && typeof opt.mode === "object") ? opt.mode.ex : undefined).ok){ glog(`${who(side)} can't pay for ${c.name} (${cost.e} energy${cost.p ? " + " + cost.p + " power" : ""}), so it isn't played.`, {kind:"bad"}); renderGame(); return; }
@@ -5355,7 +5431,7 @@ document.addEventListener("click", e => {
         // during a showdown Focus only Action/Reaction cards, Ambush units at that battlefield and hidden flips are legal (rules 344-347)
         if (gFocus && H.from !== "facedown" && !kw(c, "Action") && !kw(c, "Reaction") && !(c.type === "Unit" && kw(c, "Ambush") && dest === gFocus.b.idx) && !(c.type === "Gear" && kw(c, "Quick-Draw"))){ flag(`Illegal move: during a showdown you can only play Action or Reaction cards${c.type === "Unit" ? " (or an Ambush unit to this battlefield)" : ""}. ${c.name} isn't one.`, true); return; }
         if (c.type === "Unit") await playUnit("me", sel.id, dest, {mode:"pool", accelerate: a === "playacc"});
-        else if (c.type === "Gear") await playGear("me", sel.id, {mode:"pool"});
+        else if (c.type === "Gear") await playGear("me", sel.id, {mode:"pool", bf: dest !== "base" && dest != null ? dest : undefined});
         else await castSpell("me", sel.id, {mode:"pool"}); }
       if ((a === "move" || a === "moveall" || a === "movesome") && gFocus){ flag("Illegal move: units can't make a standard move during a showdown (rule 437: standard moves happen outside showdowns).", true); return; }
       if (a === "move") await moveUnit("me", sel.id, dest);
@@ -5425,7 +5501,25 @@ function gameReview(){
     if (plan.watch && plan.watch[0]) A("plan-watch", `Watch for: ${plan.watch[0]}`, "Saved plan for this matchup.");
   }
   if (!adv.length) A("clean", "Clean game: nothing stood out to fix.", "No flagged moves, no lost Herons, no stranded runes.");
-  return {sum, adv};
+  return {sum, adv, turns:turningPoints()};
+}
+// Turns where the score swung by 2+ or the lead changed, with the key log lines from that turn
+function turningPoints(){
+  const tl = (G.stats.tl || []).concat([tlPoint(G.active)]); const out = []; let prev = {me:0, ai:0}, lead = null;
+  const KEY = /Conquered|Held |\bdied\b|Possession|countered|took control|returned to .*hand|stunned|Deathknell|wins with/i;
+  for (const t of tl){
+    const dMe = t.me - prev.me, dAi = t.ai - prev.ai, l = t.me > t.ai ? "me" : t.ai > t.me ? "ai" : lead;
+    if ((dMe >= 2 || dAi >= 2 || (l !== lead && lead !== null)) && (dMe || dAi)){
+      const label = `${t.side === "me" ? "You" : G.multi ? (G.players[t.side]?.short ? CNU(t.side) : "Computer") : "Computer"} – Turn ${t.n}`;
+      const grp = G.log.filter(g => g.label === label); const items = grp.flatMap(g => g.items).map(i => i.t).filter(x => KEY.test(x) && !/^(Saw|Goal|Chose|Over|Logic used|Computer's reasoning)/.test(x));
+      const what = dMe && dAi ? `you +${dMe}, ${G.multi ? "opponents" : "the computer"} +${dAi}` : dMe ? `you +${dMe}` : `${G.multi ? "opponents" : "the computer"} +${dAi}`;
+      const holds = items.filter(x => /^Held /.test(x)).length, conq = items.some(x => /^Conquered/.test(x));
+      const hint = t.side !== "me" && dAi >= 2 ? (holds >= 2 ? "It scored by holding two battlefields: contest one of them on your turn, even with a small unit." : conq ? "It conquered a battlefield you weren't defending: keep a unit there or answer the attacker." : "") : (t.side === "me" && dMe >= 2 ? "Your best scoring turn: note what set it up." : "");
+      out.push({hint, n:t.n, side:t.side, score:`${t.me}–${t.ai}`, what, lead:l !== lead && lead !== null ? (l === "me" ? "You took the lead." : "You lost the lead.") : "", lines:[...new Set(items)].slice(0, 4)});
+    }
+    prev = t; if (l) lead = l;
+  }
+  return out.slice(-5);
 }
 function saveHistory(){
   if (!G || !G.winner || !G.stats || G.histId) return;
@@ -5437,7 +5531,7 @@ function saveHistory(){
     multi: G.multi || null, oppLabel: G.multi ? (G.team ? "Opponents" : "Others") : "Computer", players: ORDER().map(x => ({side:x, name: x === "me" ? "You" : G.players[x].short, legend:G.players[x].legend, points:G.players[x].points, team:teamOf(x)})),
     bfs: G.bfs.map(b => b.code), dur: Math.round((Date.now() - (G.started||Date.now()))/1000),
     stats:{me:G.stats.me, ai: G.multi ? mergeStats(foesOf("me").map(f => G.stats[f])) : G.stats.ai}, tl:G.stats.tl.concat([Object.assign(tlPoint(G.active), {end:true})]),
-    sum:R.sum, adv:R.adv, log:G.log};
+    sum:R.sum, adv:R.adv, turns:R.turns, log:G.log};
   if (gMatch){ rec.matchScore = {me:matchWins("me"), ai:matchWins("ai")}; rec.matchDone = rec.matchScore.me === 2 || rec.matchScore.ai === 2; }
   G.histId = rec.id; gHist.push(rec); saveHist();
 }
@@ -5467,6 +5561,7 @@ function reviewHTML(rec, full){
   return `<div class="hrev">
     <div class="hrev-cols"><div><h4>Summary</h4><ul class="hsum">${rec.sum.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>
     <div><h4>Advice</h4><ul class="hadv">${rec.adv.map(a => `<li><b>${esc(a.t)}</b><span>${esc(a.why)}</span></li>`).join("")}</ul></div></div>
+    ${(rec.turns||[]).length ? `<h4>Turning points</h4><ul class="hadv">${rec.turns.map(t => `<li><b>${t.side === "me" ? "Your" : "Their"} turn ${t.n}: ${esc(t.what)} (score ${esc(t.score)}).${t.lead ? " " + esc(t.lead) : ""}</b>${t.lines.length ? `<span>${t.lines.map(esc).join(" · ")}</span>` : ""}${t.hint ? `<span><i>${esc(t.hint)}</i></span>` : ""}</li>`).join("")}</ul>` : ""}
     <div class="hrev-cols"><div>${pointsChart(rec.tl)}</div><div>${statsTable(rec.stats, rec.oppLabel)}</div></div>
     ${full ? `<h4>Turn-by-turn log</h4><div class="hlog">${rec.log.map((t,i) => `<details ${i < 2 ? "open" : ""}><summary>${esc(t.label)} <span class="muted">(${t.items.length})</span></summary><ol>${t.items.map(logItemHTML).join("")}</ol></details>`).join("")}</div>` : ""}
   </div>`;
@@ -5959,8 +6054,10 @@ function runesHTML(p, side){
   if (!p.runes.length) return `<span class="g-zlab">Runes</span>`;
   return p.runes.map(r => { const c = gCard(r.code), d = c.dom[0]; return `<button type="button" class="g-runecard ${r.ex?"ex":""} ${gSel&&gSel.id===r.id?"sel":""}" style="--rc:${DCOL[d]}" data-gpick="rune:${r.id}" ${side!=="me"?"disabled":""} aria-label="${esc(c.name)}${r.ex?", exhausted":", ready"}" data-tip="${esc(c.name)}: ${r.ex?"exhausted (turned sideways)":"ready (upright)"}. Left-click to exhaust (+1 energy); right-click to recycle or for more options.">${c.img?`<img src="${IMG}${c.img}?accountingTag=RB&w=120" alt="" loading="lazy" onerror="this.remove()">`:""}<span>${esc(d)}</span></button>`; }).join("");
 }
+function deployRow(b, who){ const sides = who === "me" ? ["me"] : ORDER().filter(x => x !== "me"); const gs = sides.flatMap(s => G.players[s].gear.filter(g => g.bf === b.idx && !g.attachedTo).map(g => [g, s])); if (!gs.length) return "";
+  return `<div class="g-deprow ${who}"><span class="g-zlab" data-tip="Deploy gear: played to this battlefield; killed when an opponent holds here.">Deployed</span>${gs.map(([g, s]) => `<div class="g-gearcard ${g.ex?"ex":""} ${gSel&&gSel.id===g.id?"sel":""}" data-gpick="gear:${g.id}" ${s==="me"?`draggable="true" data-gdrag="gear:${g.id}"`:""} role="button" tabindex="0">${cardImgHTML(gCard(g.code), "small")}</div>`).join("")}</div>`; }
 function gearHTML(p, side){
-  return p.gear.filter(g => !g.attachedTo).map(g => `<div class="g-gearcard ${g.ex?"ex":""} ${gSel&&gSel.id===g.id?"sel":""}" data-gpick="gear:${g.id}" data-gdrop="gearc:${g.id}" ${side==="me"?`draggable="true" data-gdrag="gear:${g.id}"`:""} role="button" tabindex="0">${cardImgHTML(gCard(g.code), "small")}${g.emp?`<div class="g-marks"><span class="g-mk t-emp" data-tip-title="Empowered" data-tip="${esc(MK_TIP.emp)}">EMP</span></div>`:""}</div>`).join("");
+  return p.gear.filter(g => !g.attachedTo && g.bf == null).map(g => `<div class="g-gearcard ${g.ex?"ex":""} ${gSel&&gSel.id===g.id?"sel":""}" data-gpick="gear:${g.id}" data-gdrop="gearc:${g.id}" ${side==="me"?`draggable="true" data-gdrag="gear:${g.id}"`:""} role="button" tabindex="0">${cardImgHTML(gCard(g.code), "small")}${g.emp?`<div class="g-marks"><span class="g-mk t-emp" data-tip-title="Empowered" data-tip="${esc(MK_TIP.emp)}">EMP</span></div>`:""}</div>`).join("");
 }
 function pileHTML(n, label, kind, tip){ return `<div class="g-pile ${kind}" data-tip="${esc(tip)}"><div class="g-backcard ${n?"":"empty"}">${n?`<span>${n}</span>`:""}</div><small>${esc(label)}</small></div>`; }
 function trashHTML(p, side){ const top = p.trash[p.trash.length-1]; return `<div class="g-pile trash" data-gtrash="${side}" role="button" tabindex="0" aria-label="View ${side === "me" ? "your" : esc(CN(side)) + "'s"} trash (${p.trash.length} cards)" data-tip="Click to view every card. ${side==="me"?"Your":"The computer's"} trash: ${p.trash.length} cards${top?`; top card ${cnm(top.code)}`:""}.">${top?`<div class="g-trashtop">${cardImgHTML(gCard(top.code),"small")}<span>${p.trash.length}</span></div>`:`<div class="g-backcard empty"></div>`}<small>Trash</small></div>`; }
@@ -6014,9 +6111,9 @@ function renderGame(){
     return `<div class="g-bf ${b.ctrl?"c-"+(b.ctrl === "me" ? "me" : G.multi && !isFoe("me", b.ctrl) ? "ally" : "ai"):""}" data-gdrop="bf:${b.idx}">
       ${G.multi && b.ctrl && b.ctrl !== "me" ? `<span class="g-bfowner ${isFoe("me", b.ctrl) ? "foe" : "ally"}">${esc(G.players[b.ctrl].short)} controls</span>` : ""}
       <div class="g-hidrow ai">${ORDER().filter(x => x !== "me").map(x => hiddenAt(b, x)).join("")}</div>
-      <div class="g-row ai">${aiU.map(u => unitHTML(u, u.ctrl)).join("")}</div>
+      ${deployRow(b, "ai")}<div class="g-row ai">${aiU.map(u => unitHTML(u, u.ctrl)).join("")}</div>
       <div class="g-bfcard" data-code="${b.code}" data-open="${b.code}">${c.img?`<img src="${cardSrc(c, 500)}" alt="" loading="lazy" onerror="if(!this.dataset.t){this.dataset.t=1;this.src='${cdnCard(c, 500)}'}else this.remove()">`:""}<div class="g-bftxt"><b>${esc(c.name)}</b><span>${esc((c.text||"").replace(/:rb_energy_(\d+):/g,"$1 energy").replace(/:rb_rune_\w+:/g,"1 power").replace(/:rb_\w+:/g,""))}</span></div><span class="g-ctrl ${b.ctrl||"none"}">${b.ctrl==="me"?"You control":b.ctrl==="ai"?"Computer controls":"Uncontrolled"}</span></div>
-      <div class="g-row me">${meU.map(u => unitHTML(u,"me")).join("")}</div>
+      <div class="g-row me">${meU.map(u => unitHTML(u,"me")).join("")}</div>${deployRow(b, "me")}
       <div class="g-hidrow me" data-gdrop="hide:${b.idx}"><span class="g-zlab">Hide</span>${hiddenAt(b,"me")}</div></div>`; };
   const myTurn = G.active === "me" && !G.winner;
   const trashFlow = me.trash.filter(x => /\[Flow\]/.test(gCard(x.code).text||"") || me.flow.includes(x.id));
@@ -6090,7 +6187,7 @@ document.addEventListener("drop", e => {
       const H = handObj("me", id); if (!H) return; const c = gCard(H.obj.code);
       if (zk === "hide"){ if (!kw(c, "Hidden")) { flag(`${c.name} doesn't have Hidden, so it can't be hidden.`); return; } await hideCard("me", id, +zv, "pool"); return; }
       if (c.type === "Unit"){ if (H.from === "facedown") await playUnit("me", id, H.obj.bf, {mode:"pool"}); else if (dest !== null) await playUnit("me", id, dest, {mode:"pool"}); }
-      else if (c.type === "Gear") await playGear("me", id, {mode:"pool"});
+      else if (c.type === "Gear") await playGear("me", id, {mode:"pool", bf: dest !== null && dest !== "base" ? dest : undefined});
       else await castSpell("me", id, {mode:"pool"});
     } else if (kind === "gear"){
       if (zk === "unit"){ const g = G.players.me.gear.find(x => x.id === id); if (g && EQUIP[cnm(g.code)]) await equip("me", id, zv, "power"); else flag("Only equipment can be attached to a unit."); }
