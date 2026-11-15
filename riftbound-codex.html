@@ -3637,7 +3637,7 @@ async function abAct(side, id){
   if (what === "bar"){ const t = await chooseUnit(side, "Arena Bar: buff which exhausted friendly unit?", unitsOf(side).filter(v => v.ex && !v.buff), {ai:L => aiBestFriend(side, L)}); if (!t) return; g.ex = true; buffU(unitById(t), "Arena Bar"); }
   if (what === "grab"){ const rec = p.trash.splice(0, 3); p.deck.push(...rec); autoPay(side, 1, 0, []); spendPool(side, 1, 0, []); g.ex = true; glog(`Garbage Grabber: recycled ${rec.length} cards from the trash.`); drawCards(side, 1, "Garbage Grabber."); }
   if (what === "bird"){ const d = await ask(side, {title:"Gutter Palace: discard which card?", options:p.hand.map(z => ({id:z.id, label:cnm(z.code)})), ai:o => aiDiscardPick(side, o)}); if (!d) return; const i = p.hand.findIndex(z => z.id === d); p.trash.push(p.hand.splice(i,1)[0]); g.ex = true; mkToken(side, "bird", "base"); glog("Gutter Palace: a 1-might Bird token with Deflect in base."); }
-  if (what === "uemp"){ const a = abActs(side).find(z => z.id === id); if (!a) return; autoPay(side, a.cost.e, a.cost.pw, a.cost.doms); spendPool(side, a.cost.e, a.cost.pw, a.cost.doms); u.emp = true; glog(`${cnm(u.code)} is now Empowered.`, {why:"[Empower]: pay the cost once; Empowered abilities turn on."}); if (AB[cnm(u.code)]?.onEmpower) await AB[cnm(u.code)].onEmpower(side, u); }
+  if (what === "uemp"){ const a = abActs(side).find(z => z.id === id); if (!a) return; autoPay(side, a.cost.e, a.cost.pw, a.cost.doms); spendPool(side, a.cost.e, a.cost.pw, a.cost.doms); u.emp = true; glog(`${who(side)} paid ${a.cost.e} energy${a.cost.pw ? ` + ${a.cost.pw} power` : ""} to Empower ${cnm(u.code)} (its own [Empower] ability).`, {why:"[Empower]: pay the cost once; Empowered abilities turn on."}); if (AB[cnm(u.code)]?.onEmpower) await AB[cnm(u.code)].onEmpower(side, u); }
   if (id === "l:rogueemp"){ autoPay(side, 3, 1, []); spendPool(side, 3, 1, []); p.empowered = true; glog("Rogue Assassin is now Empowered: its pull-back also readies the unit."); }
   if (id.startsWith("l:rogue:")){ const v = unitById(id.split(":")[2]); if (v) await akaliPull(side, v); }
   if (what === "hook"){ const k = await chooseUnit(side, "Baited Hook: kill which friendly unit?", unitsOf(side), {noWindow:true, ai:Lx => Lx.slice().sort((a,b) => ((AB[cnm(b.code)]?.death ? 3 : 0) + isTok(b)*2 - mightOf(b)) - ((AB[cnm(a.code)]?.death ? 3 : 0) + isTok(a)*2 - mightOf(a)))[0]?.id}); if (!k) return;
@@ -3849,7 +3849,7 @@ Object.assign(AB, {
   "Orianna - Exquisite": {noCombatDmgIf:u => { const b = bfOfU(u); return !(b && allGear().some(x => x.s === u.ctrl && x.g.bf === b.idx) ) && !allGear().some(x => x.s === u.ctrl && x.g.attachedTo && bfOfU(unitById(x.g.attachedTo) || {id:""}) === b); }},
   "Pyke - Dockside Butcher": {extraP:{dom:"Fury", label:"pay 1 Fury power more: Pyke enters ready with +2 might this turn"}, play: async (s, u, dest, ctx) => { if (ctx.extraPaid){ u.ex = false; u.tmp = (u.tmp||0) + 2; glog("Pyke paid the extra Fury: ready, +2 might this turn."); } }},
   "Steel Paws": {might:u => isEmp(u) ? 7 : 0},
-  "Tornado Warrior": {play: async (s, u, dest, ctx) => { if (!ctx.fromHidden || dest === "base") return; const t = await chooseUnit(s, "Tornado Warrior: empower a unit here until end of turn?", G.bfs[dest].units.filter(v => v.ctrl === s && !isEmp(v) && AB[cnm(v.code)]?.might), {optional:true, ai:L => L.sort((a,b) => (AB[cnm(b.code)].might({...b, emp:true}) - AB[cnm(a.code)].might({...a, emp:true})))[0]?.id}); if (t){ unitById(t).tmpEmp = G.turnStamp; glog(`Tornado Warrior empowered ${cnm(unitById(t).code)} until the end of the turn.`); } }},
+  "Tornado Warrior": {play: async (s, u, dest, ctx) => { if (!ctx.fromHidden || dest === "base") return; const t = await chooseUnit(s, "Tornado Warrior: empower a unit here until end of turn?", G.bfs[dest].units.filter(v => v.ctrl === s && !isEmp(v) && AB[cnm(v.code)]?.might), {optional:true, ai:L => L.sort((a,b) => (AB[cnm(b.code)].might({...b, emp:true}) - AB[cnm(a.code)].might({...a, emp:true})))[0]?.id}); if (t){ unitById(t).tmpEmp = G.turnStamp; glog(`Tornado Warrior was played from face down at ${cnm(G.bfs[dest].code)}, so it empowered ${cnm(unitById(t).code)} until the end of the turn.`, {why:"Tornado Warrior: when you play me from face down, you may empower something here. Disempower it at end of turn."}); } }},
   "Clockwork Keeper": {extraP:{dom:"Calm", label:"pay 1 Calm power more to draw 1"}, play: async (s, u, dest, ctx) => { if (ctx.extraPaid) drawCards(s, 1, "Clockwork Keeper: paid the extra Calm, draw 1."); }},
   "Hunting Blind": {deploy:true, play: async (s, g) => { const b = G.bfs[g.bf]; if (!b) return; const t = await chooseUnit(s, `Hunting Blind: move an enemy unit to ${cnm(b.code)}?`, enemyUnits(s).filter(v => bfOfU(v) !== b), {optional:true, ai:L => (L.filter(v => mightOf(v) < bfMight(b, s)).sort((a,c) => aiThreat(c) - aiThreat(a))[0]?.id) || null}); if (t){ await moveTo(s, unitById(t), b.idx, "Hunting Blind"); if (unitById(t) && bfOfU(unitById(t)) === b) await resolveArrival(unitById(t).ctrl, b); } }},
   "Edge of Night": {flipAttach:true},
@@ -4285,6 +4285,14 @@ async function leg2Hold(s){
 async function akaliPull(s, u){ const p = G.players[s]; p.legEx = true; await moveTo(s, u, "base", "Rogue Assassin"); if (p.empowered){ u.ex = false; glog(`Rogue Assassin is Empowered, so ${cnm(u.code)} readied.`); } }
 function hiddenLimit(side, b){ return AB[cnm(b.code)]?.hideLimit || 1; }
 // the computer: hide Hidden cards at its battlefields with spare power, and play them later as reactions
+// units whose text only works when played from face down (Tornado Warrior, Evelynn, Entrancing): hide them instead of hard-casting a plain body
+function aiFaceDownHold(side, x){
+  const c = gCard(x.code); if (!kw(c, "Hidden") || !/when you play me from face ?down/i.test(c.text || "")) return false;
+  const p = G.players[side], room = G.bfs.some(b => b.ctrl === side && p.hidden.filter(h => h.bf === b.idx).length < hiddenLimit(side, b));
+  const hold = room || unitsOf(side).length >= 2;
+  if (hold && !(AIH.fdLog||{})[c.name]){ AIH.fdLog = {...(AIH.fdLog||{}), [c.name]:1}; aiWhy(side, `kept ${c.name} to hide`, {chose:room ? "hide it at a battlefield it holds" : "hold it until it holds a battlefield to hide it at", over:`playing it from hand: its ability only works when it's played from face down, so from hand it's just a ${c.m}-might body.`, rule:"face-down payoff units get hidden, not hard-cast, unless the board needs bodies"}); }
+  return hold;
+}
 async function aiHideGeneric(side){
   const p = G.players[side];
   for (const x of [...p.hand].filter(h => kw(gCard(h.code), "Hidden"))){
@@ -4300,7 +4308,7 @@ async function aiFlipHidden(side, b, need){
   for (const h of p.hidden.filter(h => h.bf === b.idx && h.turn < G.turnStamp)){
     const c = gCard(h.code), mine = b.units.filter(u => u.ctrl === side), theirs = b.units.filter(u => isFoe(side, u.ctrl));
     let go = false, tgt = null, why = "";
-    if (c.type === "Unit"){ const m = (c.m||0) + (c.name === "Elnuk Herd" ? 3 : 0); if (m >= need || c.name === "Mischievous Marai" || c.name === "Evelynn - Entrancing"){ go = true; why = `${c.name} joins the fight`; } }
+    if (c.type === "Unit"){ const tw = c.name === "Tornado Warrior" ? Math.max(0, ...mine.filter(v => !isEmp(v) && AB[cnm(v.code)]?.might).map(v => AB[cnm(v.code)].might({...v, emp:true}))) : 0; const m = (c.m||0) + (c.name === "Elnuk Herd" ? 3 : 0) + tw; if (tw && m >= need){ go = true; why = `Tornado Warrior joins and empowers a unit here (+${tw} might this turn)`; } else if (m >= need || c.name === "Mischievous Marai" || c.name === "Evelynn - Entrancing"){ go = true; why = `${c.name} joins the fight`; } }
     if (c.name === "Back Off"){ const t = theirs.filter(u => !u.stun && canChoose(side, u)).sort((a,x) => mightOf(x) - mightOf(a))[0]; if (t && mightOf(t) >= need){ go = true; tgt = t.id; why = `stun ${cnm(t.code)}`; } }
     if (c.name === "Block"){ const t = mine.sort((a,x) => mightOf(x) - mightOf(a))[0]; if (t && G.active !== side && 3 >= need){ go = true; tgt = t.id; why = `Shield 3 on ${cnm(t.code)}`; } }
     if (c.name === "Edge of Night" && mine.length && 2 >= need){ go = true; why = "attach Edge of Night (+2 might) to a unit here"; }
@@ -4694,6 +4702,7 @@ function marksHTML(u){
   if (u.buff) out.push(chip("t-buff", "+1", "buff", "Buff"));
   if (u.stun) out.push(chip("t-stun", "STUN", "stun", "Stunned"));
   if (u.emp) out.push(chip("t-emp", "EMP", "emp", "Empowered"));
+  else if (u.tmpEmp === G.turnStamp) out.push(chip("t-emp", "EMP*", "emp", "Empowered until end of turn (Tornado Warrior)"));
   if (u.tmp) out.push(chip("t-tmp", (u.tmp > 0 ? "+" : "") + u.tmp, "tmp", `${u.tmp > 0 ? "+" : ""}${u.tmp} might this turn`));
   if (u.assault) out.push(chip("t-asl", "A" + u.assault, "assault", `Assault ${u.assault} this turn`));
   if (u.shieldT) out.push(chip("t-shd", "S" + u.shieldT, "shield", `Shield ${u.shieldT} this turn`));
@@ -5217,6 +5226,32 @@ function aiVoidAssaultPlan(side){
   return null;
 }
 
+// Empower: pay a unit's [Empower] cost when it adds real might (Steel Paws +7) or turns on an ability
+async function aiEmpowerUnits(side){
+  const p = G.players[side]; let guard = 4;
+  while (guard-- && !G.winner){
+    const acts = abActs(side).filter(a => a.id.endsWith(":uemp"));
+    const scored = acts.map(a => { const u = a.src, nm = cnm(u.code), ab = AB[nm];
+      const before = mightOf(u); u.emp = true; const after = mightOf(u); u.emp = false;
+      const gain = after - before, abil = !!(ab && ab.onEmpower) || (ab && ab.might ? false : /\[Empowered\]/.test(gCard(u.code).text || ""));
+      return {a, u, nm, gain, abil}; }).filter(z => z.gain >= 2 || z.abil).sort((x, y) => y.gain - x.gain);
+    if (!scored.length) return;
+    const z = scored[0], loc = locOf(z.u.id), where = loc && loc.zone === "bf" ? cnm(loc.b.code) : "base";
+    const gearLeft = p.hand.filter(h => gCard(h.code).type === "Gear").map(h => cnm(h.code));
+    aiWhy(side, `Empower ${z.nm}`, {saw:`${p.runes.filter(r => !r.ex).length} ready runes; ${z.nm} at ${where}`, chose:`paid ${z.a.cost.e} energy${z.a.cost.pw ? ` + ${z.a.cost.pw} power` : ""} to Empower it${z.gain ? ` (+${z.gain} might, permanent)` : ""}`,
+      over: gearLeft.length ? `${gearLeft.join(", ")} first: a lasting might boost on the board is worth more than that gear this turn.` : "keeping the runes: nothing else in hand uses them as well.", rule:"Empower units with spare energy before playing gear"});
+    await pace(`Empowers ${z.nm}${z.gain ? `: +${z.gain} might from now on` : ""}.`, z.u.code);
+    await abAct(side, z.a.id); renderGame();
+  }
+}
+// don't play a 2nd copy of a one-shot protective gear (Zhonya's) while the first is still waiting on the board
+function aiDupGearHold(side, x){
+  const p = G.players[side], c = gCard(x.code);
+  if (EQUIP[c.name] || !/next time .*would die/i.test(c.text || "")) return false;
+  if (!p.gear.some(g => cnm(g.code) === c.name && !g.attachedTo)) return false;
+  aiWhy(side, `kept ${c.name}`, {chose:"held the second copy", over:`playing it: one ${c.name} is already on the board and only the next death uses it; this copy waits until the first is spent.`, rule:"no duplicate one-shot protection"});
+  return true;
+}
 // Gear-engine decks play their gear before units: Orianna animates gear next turn, Azir's Legend needs an Equipment played,
 // Miss Fortune ramps and draws off cheap gear, Viktor's Concert Poster makes Recruits on later conquers.
 const GEAR_FIRST = {
@@ -5263,7 +5298,7 @@ async function aiTurn(side = "ai"){
   // 2) units, biggest first, while affordable
   let guard = 6;
   while (guard--){
-    let opts = [...p.hand, ...(p.champ ? [p.champ] : [])].filter(x => gCard(x.code).type === "Unit" && castable(x) && !(pbUses(side, "v1") && kw(gCard(x.code), "Hidden") && G.bfs.some(b => b.ctrl === side && p.hidden.filter(h => h.bf === b.idx).length < hiddenLimit(side, b)))).sort((a,b) => (costOf(side, gCard(b.code)).e) - (costOf(side, gCard(a.code)).e));
+    let opts = [...p.hand, ...(p.champ ? [p.champ] : [])].filter(x => gCard(x.code).type === "Unit" && castable(x) && !(pbUses(side, "v1") && kw(gCard(x.code), "Hidden") && G.bfs.some(b => b.ctrl === side && p.hidden.filter(h => h.bf === b.idx).length < hiddenLimit(side, b))) && !aiFaceDownHold(side, x)).sort((a,b) => (costOf(side, gCard(b.code)).e) - (costOf(side, gCard(a.code)).e));
     { const gh = opts.map(x => [x, aiGuideHold(side, x)]).filter(z => z[1]); if (gh.length){ opts = opts.filter(x => !gh.some(z => z[0] === x)); if (!AIH.ghLog){ AIH.ghLog = 1; aiGuide(side, "watcher", `wait on ${cnm(gh[0][0].code)}`, {chose:gh[0][1]}); } } }
     { const br = opts.find(x => cnm(x.code) === "Brynhir Thundersong"); if (br && opts[0] !== br && p.base.some(u => !u.ex) && guideLine(side, "brynhir")){ opts = [br, ...opts.filter(x => x !== br)]; aiGuide(side, "brynhir", "Brynhir first", {chose:"play Brynhir Thundersong before attacking, so you can't play cards for the rest of the turn"}); } }
     { const held = opts.map(x => [x, aiAmbushHold(side, x)]).filter(z => z[1]); if (held.length){ opts = opts.filter(x => !held.some(z => z[0] === x)); if (!AIH.ambLog){ AIH.ambLog = 1; aiGuide(side, "ambush", "keep Ambush units in hand", {chose:held[0][1]}); aiWhy(side, `hold ${held.map(z => cnm(z[0].code)).join(", ")}`, {chose:held[0][1], rule:"Ambush units stay in hand unless pouncing now wins a fight, its hand is full, or it has held them 3 turns."}); } } }
@@ -5287,8 +5322,10 @@ async function aiTurn(side = "ai"){
   const ufd = p.hand.find(h => cnm(h.code) === "Up from the Deep"); if (ufd && !(allUnits().filter(u=>u.ctrl===side).length < 3 && castable(ufd))) aiWhy(side, "kept Up from the Deep", {chose:"held it", over:`casting it: ${allUnits().filter(u=>u.ctrl===side).length >= 3 ? "it already has 3 or more units" : "it can't pay for it"}.`});
   if (ufd && allUnits().filter(u=>u.ctrl===side).length < 3 && castable(ufd)){ aiWhy(side, "cast Up from the Deep", {saw:`${allUnits().filter(u=>u.ctrl===side).length} units on its board`, chose:"two Tentacle tokens", over:"holding it: under 3 units counts as a thin board."}); await pace("casts Up from the Deep for two Tentacle tokens: its board is thin.", ufd.code); await castSpell(side, ufd.id, {mode:"auto"}); }
   for (const t of [...p.trash]){ const c = gCard(t.code); if (/\[Flow\]/.test(c.text||"") && /Lightning Rush|Up from the Deep/.test(c.name) && p.runes.filter(r=>!r.ex).length >= 3){ if (pbUses(side, "k2")) aiPb(side, "k2", `replay ${c.name} from the trash:`, {chose:"Flow cast; playing a card from outside the hand empowers Kennen's Legend"}); await pace(`casts ${c.name} again from its trash with Flow, which also empowers Kennen's legend.`, t.code); await castSpell(side, t.id, {mode:"auto"}); break; } }
+  // empower units before spending on gear: a permanent might boost usually beats a gear
+  await aiEmpowerUnits(side); if (G.winner) return;
   // gear: play it, equip it
-  for (const x of [...p.hand].filter(h => gCard(h.code).type === "Gear" && (!kw(gCard(h.code), "Deploy") || G.bfs.some(b => b.ctrl === side)))){ if (!castable(x)) aiWhy(side, `kept ${cnm(x.code)}`, {chose:"held the gear", over:"playing it: not enough runes left."}); if (castable(x)){ aiWhy(side, `play ${cnm(x.code)}`, {chose:`${cnm(x.code)}`, over:"holding it: it plays any gear it can afford after its units.", rule:"gear after units, no evaluation of timing."}); await pace(`plays ${cnm(x.code)}${cnm(x.code)==="Seal of Discord"?" (extra Chaos power each turn)":""}.`, x.code); await playGear(side, x.id, {mode:"auto"}); } }
+  for (const x of [...p.hand].filter(h => gCard(h.code).type === "Gear" && (!kw(gCard(h.code), "Deploy") || G.bfs.some(b => b.ctrl === side)))){ if (aiDupGearHold(side, x)) continue; if (!castable(x)) aiWhy(side, `kept ${cnm(x.code)}`, {chose:"held the gear", over:"playing it: not enough runes left."}); if (castable(x)){ aiWhy(side, `play ${cnm(x.code)}`, {chose:`${cnm(x.code)}`, over:"holding it: it plays any gear it can afford after its units.", rule:"gear after units, no evaluation of timing."}); await pace(`plays ${cnm(x.code)}${cnm(x.code)==="Seal of Discord"?" (extra Chaos power each turn)":""}.`, x.code); await playGear(side, x.id, {mode:"auto"}); } }
   if (pbUses(side, "c1")) await aiBladeEquip(side);
   for (const g of p.gear.filter(g => EQUIP[cnm(g.code)] && !g.attachedTo && cnm(g.code) !== "Blade of the Exile")){ const ori = unitsOf(side).find(x => cnm(x.code) === "Orianna - Exquisite" && !eqOf(x).length); if (ori && pbUses(side, "i2")) aiPb(side, "i2", `equip ${cnm(g.code)} to Orianna:`, {chose:"Orianna deals combat damage only with a friendly gear there"}); const u = ori || allUnits().filter(x => x.ctrl === side).sort((a,b)=>mightOf(b)-mightOf(a))[0]; if (u && canAfford(side,0,1,EQUIP[cnm(g.code)].cost.startsWith("chaos")?["Chaos"]:(EQUIP[cnm(g.code)].dom?[EQUIP[cnm(g.code)].dom]:[])) && (!EQUIP[cnm(g.code)].cost.startsWith("chaos") || p.trash.length >= 2)){ await pace(`equips ${cnm(g.code)} to ${cnm(u.code)} for +${EQUIP[cnm(g.code)].m} might.`, g.code); await equip(side, g.id, u.id, "power"); } }
   // 3b) removal and tempo: answer your units that are holding battlefields
@@ -6201,7 +6238,7 @@ const _renderGame = renderGame;
 renderGame = function(){ _renderGame(); requestAnimationFrame(retipAtPointer); };
 window.__gset = fn => { fn(G, {gCard, nid, findByName, TOKENS}); renderGame(); };
 window.__startTurnRef = () => startTurn; window.__hasKw = (u,k) => hasKw(u,k); window.__dbg = () => ({autoPay, spendPool, canAfford, LEG2, cnm, legName, aiSideboard, aiPickBf, parseListText, aiDeckOptions, activeDeck, gCard}); window.__mightOf = (u,c) => mightOf(u,c||{}); window.__geng_start = s => startTurn(s); window.__geng_ai = s => aiTurn(s); window.__mullCfg = p => aiMullCfg(p); window.__pbMull = p => pbMullBack(p); window.__chooseBack = (h,c) => chooseBack(h,c); window.__geng_finish = s => finishTurn(s);
-window.__geng = {playUnit, playGear, abAct, abActs, aiUseSpells, moveUnit, moveGroup, castSpell, equip, setEx, hideCard, killUnit, unitById, gearPower, abConquer, abHold, mightOf, hasKw, killGear, attachGear, legMainStart, costOf, get G(){ return G; }};
+window.__geng = {playUnit, playGear, abAct, abActs, aiUseSpells, moveUnit, moveGroup, castSpell, equip, setEx, hideCard, killUnit, unitById, gearPower, abConquer, abHold, mightOf, hasKw, killGear, attachGear, legMainStart, costOf, aiEmpowerUnits, aiDupGearHold, aiFaceDownHold, get G(){ return G; }};
 window.__gstate = () => JSON.parse(JSON.stringify({bfs:G.bfs.map(b => ({n:cnm(b.code), ctrl:b.ctrl, ss:b.ssTurn, units:b.units.map(u => cnm(u.code)+"/"+u.ctrl)})), stamp:G.turnStamp}));
 window.__gdbg = () => ({busy:gBusy, prompt:gPrompt?{t:gPrompt.title,n:gPrompt.options.length,opt:!!gPrompt.optional}:null, active:G?.active, phase:G?.phase, owe:G?.players?.me?.owe||null});
 
